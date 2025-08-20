@@ -1,14 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase'
-import { validateUserId, validateSubscriptionId, sanitizeInput, assignVariant } from '@/lib/utils'
+
+// Mock data storage for demo purposes
+const mockCancellations = new Map()
+
+// Simple A/B testing function without crypto dependency
+function assignVariant(userId: string): 'A' | 'B' {
+  // Simple hash function for demo
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) {
+    const char = userId.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  return Math.abs(hash) % 2 === 0 ? 'A' : 'B'
+}
+
+// Simple validation functions
+function validateUserId(userId: string): boolean {
+  return userId && userId.length > 0
+}
+
+function validateSubscriptionId(subscriptionId: string): boolean {
+  return subscriptionId && subscriptionId.length > 0
+}
+
+function sanitizeInput(input: string): string {
+  return input ? input.replace(/[<>]/g, '').trim().substring(0, 1000) : ''
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { userId, subscriptionId } = body
 
+    console.log('Received request:', { userId, subscriptionId })
+
     // Input validation
     if (!validateUserId(userId)) {
+      console.log('Invalid user ID:', userId)
       return NextResponse.json(
         { error: 'Invalid user ID format' },
         { status: 400 }
@@ -16,6 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!validateSubscriptionId(subscriptionId)) {
+      console.log('Invalid subscription ID:', subscriptionId)
       return NextResponse.json(
         { error: 'Invalid subscription ID' },
         { status: 400 }
@@ -29,53 +59,38 @@ export async function POST(request: NextRequest) {
     // Assign A/B test variant
     const downsellVariant = assignVariant(sanitizedUserId)
 
-    const supabase = createServerClient()
+    console.log('Assigned variant:', downsellVariant)
 
     // Check if cancellation already exists for this user
-    const { data: existingCancellation } = await supabase
-      .from('cancellations')
-      .select('id, downsell_variant')
-      .eq('user_id', sanitizedUserId)
-      .single()
-
-    if (existingCancellation) {
-      // Return existing variant if cancellation already exists
+    if (mockCancellations.has(sanitizedUserId)) {
+      const existingCancellation = mockCancellations.get(sanitizedUserId)
+      console.log('Found existing cancellation:', existingCancellation)
       return NextResponse.json({
         id: existingCancellation.id,
         downsell_variant: existingCancellation.downsell_variant
       })
     }
 
-    // Create new cancellation record
-    const { data, error } = await supabase
-      .from('cancellations')
-      .insert({
-        user_id: sanitizedUserId,
-        subscription_id: sanitizedSubscriptionId,
-        downsell_variant,
-        reason: null,
-        accepted_downsell: false
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Database error:', error)
-      return NextResponse.json(
-        { error: 'Failed to create cancellation record' },
-        { status: 500 }
-      )
+    // Create new cancellation record (mock)
+    const mockId = `cancel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const cancellationData = {
+      id: mockId,
+      user_id: sanitizedUserId,
+      subscription_id: sanitizedSubscriptionId,
+      downsell_variant: downsellVariant,
+      reason: null,
+      accepted_downsell: false,
+      created_at: new Date().toISOString()
     }
 
-    // Update subscription status
-    await supabase
-      .from('subscriptions')
-      .update({ status: 'pending_cancellation' })
-      .eq('user_id', sanitizedUserId)
+    // Store in mock data
+    mockCancellations.set(sanitizedUserId, cancellationData)
+
+    console.log('Mock cancellation created:', cancellationData)
 
     return NextResponse.json({
-      id: data.id,
-      downsell_variant: data.downsell_variant
+      id: cancellationData.id,
+      downsell_variant: cancellationData.downsell_variant
     })
 
   } catch (error) {
@@ -92,6 +107,8 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { cancellationId, reason, acceptedDownsell } = body
 
+    console.log('PUT request:', { cancellationId, reason, acceptedDownsell })
+
     if (!cancellationId) {
       return NextResponse.json(
         { error: 'Cancellation ID is required' },
@@ -99,34 +116,34 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const supabase = createServerClient()
-
-    const updateData: any = {}
-
-    if (reason !== undefined) {
-      updateData.reason = sanitizeInput(reason)
+    // Find the cancellation in mock data
+    let foundCancellation = null
+    for (const [userId, cancellation] of mockCancellations.entries()) {
+      if (cancellation.id === cancellationId) {
+        foundCancellation = cancellation
+        break
+      }
     }
 
-    if (acceptedDownsell !== undefined) {
-      updateData.accepted_downsell = Boolean(acceptedDownsell)
-    }
-
-    const { data, error } = await supabase
-      .from('cancellations')
-      .update(updateData)
-      .eq('id', cancellationId)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Database error:', error)
+    if (!foundCancellation) {
       return NextResponse.json(
-        { error: 'Failed to update cancellation record' },
-        { status: 500 }
+        { error: 'Cancellation not found' },
+        { status: 404 }
       )
     }
 
-    return NextResponse.json(data)
+    // Update the cancellation
+    if (reason !== undefined) {
+      foundCancellation.reason = sanitizeInput(reason)
+    }
+
+    if (acceptedDownsell !== undefined) {
+      foundCancellation.accepted_downsell = Boolean(acceptedDownsell)
+    }
+
+    console.log('Mock cancellation updated:', foundCancellation)
+
+    return NextResponse.json(foundCancellation)
 
   } catch (error) {
     console.error('API error:', error)
