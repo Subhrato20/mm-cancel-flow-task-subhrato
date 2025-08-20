@@ -14,7 +14,7 @@ const MOCK_USER = {
   }
 }
 
-type CancellationStep = 'confirm' | 'downsell' | 'reason' | 'complete'
+type CancellationStep = 'confirm' | 'downsell' | 'reason' | 'special-discount' | 'complete'
 type DownsellVariant = 'A' | 'B'
 
 export default function CancellationPage() {
@@ -134,7 +134,12 @@ export default function CancellationPage() {
         throw new Error('Failed to update cancellation reason')
       }
 
-      setCurrentStep('complete')
+      // Check if reason qualifies for special discount
+      if (selectedReason === 'Too expensive' || selectedReason === 'Found a better alternative') {
+        setCurrentStep('special-discount')
+      } else {
+        setCurrentStep('complete')
+      }
     } catch (error) {
       console.error('Error updating cancellation reason:', error)
     } finally {
@@ -154,6 +159,47 @@ export default function CancellationPage() {
     return Math.max(getCurrentPrice() - 10, 0)
   }
 
+  const getSpecialDiscountedPrice = () => {
+    return Math.max(getCurrentPrice() * 0.5, 0) // 50% discount
+  }
+
+  const handleSpecialDiscountAccept = async () => {
+    setIsLoading(true)
+    
+    try {
+      // Update cancellation record to mark special discount as accepted
+      const response = await fetch('/api/cancellations', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cancellationId,
+          acceptedDownsell: true,
+          reason: `${selectedReason} - Special 50% discount accepted`,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update cancellation')
+      }
+
+      // TODO: Process payment update (stub)
+      console.log('Special 50% discount payment processing would happen here')
+      
+      // Redirect to profile page
+      router.push('/profile')
+    } catch (error) {
+      console.error('Error accepting special discount:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSpecialDiscountDecline = () => {
+    setCurrentStep('complete')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-md mx-auto px-4">
@@ -169,7 +215,7 @@ export default function CancellationPage() {
               currentStep !== 'confirm' ? 'bg-red-600' : 'bg-gray-200'
             }`}></div>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              currentStep === 'downsell' || currentStep === 'reason' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'
+              currentStep === 'downsell' || currentStep === 'reason' || currentStep === 'special-discount' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'
             }`}>
               2
             </div>
@@ -290,6 +336,45 @@ export default function CancellationPage() {
               >
                 {isLoading ? 'Processing...' : 'Complete Cancellation'}
               </button>
+            </div>
+          )}
+
+          {currentStep === 'special-discount' && (
+            <div className="text-center">
+              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-4">
+                Special Offer Just For You!
+              </h1>
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+                <p className="text-lg font-semibold text-purple-800 mb-2">
+                  Get 50% off your subscription!
+                </p>
+                <p className="text-purple-700 mb-2">
+                  ${getCurrentPrice()} → ${getSpecialDiscountedPrice().toFixed(2)}/month
+                </p>
+                <p className="text-sm text-purple-600">
+                  We understand your concerns and want to make it work for you.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <button
+                  onClick={handleSpecialDiscountAccept}
+                  disabled={isLoading}
+                  className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {isLoading ? 'Processing...' : 'Accept 50% Discount'}
+                </button>
+                <button
+                  onClick={handleSpecialDiscountDecline}
+                  className="w-full bg-gray-200 text-gray-800 py-3 px-4 rounded-lg font-medium hover:bg-gray-300"
+                >
+                  No Thanks, Continue Cancellation
+                </button>
+              </div>
             </div>
           )}
 
