@@ -3,16 +3,16 @@ import { NextRequest, NextResponse } from 'next/server'
 // Mock data storage for demo purposes
 const mockCancellations = new Map()
 
-// Simple A/B testing function without crypto dependency
+// Clear mock data every 5 minutes for testing
+setInterval(() => {
+  mockCancellations.clear()
+  console.log('Mock data cleared for testing')
+}, 5 * 60 * 1000)
+
+// Random A/B testing function
 function assignVariant(userId: string): 'A' | 'B' {
-  // Simple hash function for demo
-  let hash = 0
-  for (let i = 0; i < userId.length; i++) {
-    const char = userId.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash // Convert to 32-bit integer
-  }
-  return Math.abs(hash) % 2 === 0 ? 'A' : 'B'
+  // Use Math.random() for true randomization
+  return Math.random() < 0.5 ? 'A' : 'B'
 }
 
 // Simple validation functions

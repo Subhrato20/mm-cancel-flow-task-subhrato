@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 // Mock user data for demo purposes
 const MOCK_USER = {
-  id: '550e8400-e29b-41d4-a716-446655440001',
+  id: '550e8400-e29b-41d4-a716-446655440002', // Changed to get Variant B
   email: 'user1@example.com',
   subscription: {
     id: 'sub_001',
@@ -25,18 +25,10 @@ export default function CancellationPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [cancellationId, setCancellationId] = useState<string | null>(null)
 
-  // Deterministic A/B testing based on user ID
+  // Random A/B testing - will be overridden by server response
   useEffect(() => {
-    const assignVariant = () => {
-      // Use user ID to deterministically assign variant
-      const hash = MOCK_USER.id.split('').reduce((a, b) => {
-        a = ((a << 5) - a) + b.charCodeAt(0)
-        return a & a
-      }, 0)
-      return Math.abs(hash) % 2 === 0 ? 'A' : 'B'
-    }
-    
-    setDownsellVariant(assignVariant())
+    // Set a random initial variant (will be overridden by server)
+    setDownsellVariant(Math.random() < 0.5 ? 'A' : 'B')
   }, [])
 
   const handleConfirmCancellation = async () => {
